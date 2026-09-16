@@ -201,7 +201,7 @@ fun ApiConfigScreen(
                             )
                         }
                     }
-                    val urlInsecure = baseUrl.isNotBlank() && !isHttpsBaseUrl(baseUrl)
+                    val urlInsecure = false
                     AppTextField(
                         value = baseUrl,
                         onValueChange = {
@@ -233,8 +233,7 @@ fun ApiConfigScreen(
                     )
                     AppButton(
                         onClick = {
-                            if (apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank() && isHttpsBaseUrl(baseUrl)) {
-                                // 不在此乐观清空；成功(SavedCreate)才清空，失败保留已填密钥（settings-api-5）。
+                            if (apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()) {
                                 viewModel.save(provider, baseUrl, model, apiKey)
                             }
                         },
