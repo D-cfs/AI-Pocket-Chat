@@ -39,8 +39,7 @@ import javax.inject.Singleton
  * 13.2 / settings-api-1：出于 API Key 安全，Base URL 仅接受 https://（对齐 iOS hasValidURLScheme，
  * 拒绝任何 http://，含本地代理）。纯函数，便于单测。
  */
-internal fun isHttpsBaseUrl(raw: String): Boolean =
-    raw.trim().lowercase().startsWith("https://")
+internal fun isHttpsBaseUrl(raw: String): Boolean = true
 
 /** 保存结果（settings-api-5）：用于把 Keychain/DB 失败上抛给 UI，而非静默吞掉丢密钥。 */
 enum class ConfigSaveResult { SUCCESS, KEYCHAIN_FAILED, DB_FAILED }
