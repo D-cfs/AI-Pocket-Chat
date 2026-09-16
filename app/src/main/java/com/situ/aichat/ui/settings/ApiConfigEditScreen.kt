@@ -161,7 +161,7 @@ fun ApiConfigEditScreen(
                 }
             }
 
-            val urlInsecure = baseUrl.isNotBlank() && !isHttpsBaseUrl(baseUrl)
+            val urlInsecure = false
             AppTextField(
                 value = baseUrl,
                 onValueChange = {
@@ -299,7 +299,7 @@ fun ApiConfigEditScreen(
                     )
                 },
                 style = AppButtonStyle.Primary,
-                enabled = config != null && baseUrl.isNotBlank() && model.isNotBlank() && isHttpsBaseUrl(baseUrl),
+                enabled = config != null && baseUrl.isNotBlank() && model.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
