@@ -35,8 +35,9 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(600, TimeUnit.SECONDS)
+        .readTimeout(600, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
         // Redirect handling (mirrors iOS RedirectDelegate's security intent): OkHttp follows
         // redirects and keeps Authorization on SAME-host redirects (incl. http→https), but strips
         // Authorization/Cookie on ANY host change — even stricter than iOS's exact-host rule.
