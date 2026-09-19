@@ -1,6 +1,7 @@
 package com.situ.aichat.prompt.diary
 
 import android.util.Log
+import android.content.Context
 import com.situ.aichat.data.local.dao.CharacterDao
 import com.situ.aichat.data.local.dao.MessageDao
 import com.situ.aichat.data.local.entity.DiaryEntryEntity
@@ -13,6 +14,7 @@ import com.situ.aichat.gift.GiftMomentQueueService
 import com.situ.aichat.pet.PetShopMomentQueueService
 import com.situ.aichat.prompt.schedule.CharacterSleepChecker
 import com.situ.aichat.util.DateFormatters
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
 import java.time.Instant
 import java.time.ZoneId
@@ -32,6 +34,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class DiaryGenerationCoordinator @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val diaryRepository: DiaryRepository,
     private val characterDao: CharacterDao,
     private val messageDao: MessageDao,
@@ -47,11 +50,42 @@ class DiaryGenerationCoordinator @Inject constructor(
 
     /** 先补昨天，再查今天（1:1 iOS runDiaryGeneration）；跨月后顺带兜底上月回顾（R5·开关内自查）。 */
     suspend fun runDiaryGeneration() {
+        drainPendingDiaryInteractions()   // 先补睡觉期间欠下的交互
         backfillYesterday()
         checkAndAutoGenerateToday()
         monthlyReviewService.checkAndGenerateLastMonth()
     }
 
+    /**
+     * 消费「睡觉待办队列」：角色醒了就补上评论/回复/点赞；还在睡就继续留着。
+     * 挂在 [runDiaryGeneration] 最前面，由 DiaryGenerationWorker（回前台 + 每日兜底）驱动。
+     */
+    private suspend fun drainPendingDiaryInteractions() {
+        val pending = DiaryPendingInteractionStore.load(context)
+        if (pending.isEmpty()) return
+        val settings = settingsRepo.getAppSettings()
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val remaining = mutableListOf<DiaryPendingInteractionStore.PendingDiaryInteraction>()
+        for (item in pending) {
+            if (sleepChecker.isSleeping(item.characterUuid, settings.scheduleSystemEnabled, now, zone)) {
+                remaining.add(item)   // 还在睡，保留
+                continue
+            }
+            // 醒了 → 执行
+            when (item.actionType) {
+                "comment" -> commentService.generateCommentForCharacter(item.entryUuid, item.characterUuid)
+                "reply" -> item.rootCommentId?.let { commentService.generateReplyForComment(item.entryUuid, it) }
+                "reaction" -> diaryRepository.addReaction(
+                    item.entryUuid,
+                    item.characterUuid,
+                    DiaryCommentService.REACTION_EMOJIS.random(),
+                )
+            }
+        }
+        DiaryPendingInteractionStore.save(context, remaining)
+    }
+    
     /** 今日自动生成（含全部判定门）。被 worker 调用，自带并发串行化。 */
     suspend fun checkAndAutoGenerateToday() {
         if (!generationMutex.tryLock()) {
