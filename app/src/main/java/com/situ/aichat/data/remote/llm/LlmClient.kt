@@ -465,8 +465,8 @@ class LlmClient(
 
     companion object {
         private const val TAG = "LlmClient"
-        const val SSE_IDLE_TIMEOUT_SEC = 45L
-        const val THINKING_SSE_IDLE_TIMEOUT_SEC = 120L
+        const val SSE_IDLE_TIMEOUT_SEC = 300L
+        const val THINKING_SSE_IDLE_TIMEOUT_SEC = 600L
         private const val MAX_RETRIES = 3
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
