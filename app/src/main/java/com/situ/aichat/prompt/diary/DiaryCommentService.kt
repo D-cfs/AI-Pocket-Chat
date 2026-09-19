@@ -128,6 +128,7 @@ class DiaryCommentService @Inject constructor(
             if (sleepChecker.isSleeping(exchangeAuthorUuid, settingsRepo.getAppSettings().scheduleSystemEnabled, System.currentTimeMillis(), ZoneId.systemDefault())) {
                 DiaryPendingInteractionStore.add(context, entryUuid, exchangeAuthorUuid, "reply", rootCommentId)
                 return
+                } 
             diaryRepository.addComment(
                 entryUuid = entryUuid,
                 content = content,
@@ -161,6 +162,7 @@ class DiaryCommentService @Inject constructor(
         if (sleepChecker.isSleeping(characterUuid, settingsRepo.getAppSettings().scheduleSystemEnabled, System.currentTimeMillis(), ZoneId.systemDefault())) {
             DiaryPendingInteractionStore.add(context, entryUuid, characterUuid, "reply", rootCommentId)
             return
+            } 
         diaryRepository.addComment(
             entryUuid = entryUuid,
             content = content,
@@ -226,6 +228,7 @@ class DiaryCommentService @Inject constructor(
                 DiaryPendingInteractionStore.add(context, entryUuid, uuid, "reaction")
             } else {
             diaryRepository.addReaction(entryUuid, uuid, REACTION_EMOJIS.random())
+            } 
         }
     }
 
