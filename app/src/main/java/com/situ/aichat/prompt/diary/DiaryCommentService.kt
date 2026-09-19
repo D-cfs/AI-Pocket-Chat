@@ -19,11 +19,13 @@ import com.situ.aichat.diagnostics.LogSource
 import com.situ.aichat.prompt.GeneratedContentValidator
 import com.situ.aichat.prompt.PromptStrings
 import com.situ.aichat.prompt.memory.MemoryService
+import com.situ.aichat.prompt.schedule.CharacterSleepChecker
 import com.situ.aichat.work.BackgroundScheduler
 import com.situ.aichat.work.DiaryCommentWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import java.time.Duration
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
@@ -47,6 +49,7 @@ class DiaryCommentService @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val settingsRepo: SettingsRepository,
     private val backgroundScheduler: BackgroundScheduler,
+    private val sleepChecker: CharacterSleepChecker,
 ) {
 
     /** 发布日记后调度延迟评论。delay = delayMinutes*60 + random(0..60)s（1:1 iOS）。 */
@@ -121,6 +124,10 @@ class DiaryCommentService @Inject constructor(
                 photoCount = entry.imagePaths.size,
             )
             val content = completeComment(system, strings.replyUserMessage, author.name, config) ?: return
+            // 角色在睡觉 → 入待办队列，等醒来再补。
+            if (sleepChecker.isSleeping(exchangeAuthorUuid, settingsRepo.getAppSettings().scheduleSystemEnabled, System.currentTimeMillis(), ZoneId.systemDefault())) {
+                DiaryPendingInteractionStore.add(context, entryUuid, exchangeAuthorUuid, "reply", rootCommentId)
+                return
             diaryRepository.addComment(
                 entryUuid = entryUuid,
                 content = content,
@@ -150,6 +157,10 @@ class DiaryCommentService @Inject constructor(
             photoCount = entry.imagePaths.size,
         )
         val content = completeComment(system, strings.replyUserMessage, character.name, config) ?: return
+            // 角色在睡觉 → 入待办队列，等醒来再补。
+        if (sleepChecker.isSleeping(characterUuid, settingsRepo.getAppSettings().scheduleSystemEnabled, System.currentTimeMillis(), ZoneId.systemDefault())) {
+            DiaryPendingInteractionStore.add(context, entryUuid, characterUuid, "reply", rootCommentId)
+            return
         diaryRepository.addComment(
             entryUuid = entryUuid,
             content = content,
@@ -182,6 +193,8 @@ class DiaryCommentService @Inject constructor(
         val userName = userProfileDao.get()?.nickname?.trim()?.takeIf { it.isNotEmpty() }
             ?: context.getString(R.string.diary_user_fallback)
 
+        val nowMillis = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
         val count = commentCount(Random.nextInt(1, 3), candidates.size) // 1..2 inclusive
         val shuffled = candidates.shuffled()
         val commented = mutableSetOf<String>()
@@ -190,6 +203,12 @@ class DiaryCommentService @Inject constructor(
             // 同角色不重复评同一篇（DB 查，跨 worker 重试也安全）。
             if (diaryRepository.commentCountByCharacter(entryUuid, character.uuid) > 0) {
                 commented.add(character.uuid) // 早前已评过（worker 重试）→ 点赞口径仍算评论者
+                continue
+            }
+            // 角色在睡觉 → 入待办队列，等醒来再补（延后，不略过）。
+            if (sleepChecker.isSleeping(character.uuid, settings.scheduleSystemEnabled, nowMillis, zone)) {
+                DiaryPendingInteractionStore.add(context, entryUuid, character.uuid, "comment")
+                commented.add(character.uuid)
                 continue
             }
             val content = generateComment(strings, character, entry.content, userName, config, entry.imagePaths.size) ?: continue
@@ -202,10 +221,36 @@ class DiaryCommentService @Inject constructor(
         // 封顶 3；emoji 从固定小集合选。唯一索引 + IGNORE 防重（worker 重试安全）。
         val likers = pickLikers(candidates.map { it.uuid }, commented, Random)
         likers.forEach { uuid ->
+            // 角色在睡觉 → 点赞入待办队列，等醒来再补。
+            if (sleepChecker.isSleeping(uuid, settings.scheduleSystemEnabled, nowMillis, zone)) {
+                DiaryPendingInteractionStore.add(context, entryUuid, uuid, "reaction")
+            } else {
             diaryRepository.addReaction(entryUuid, uuid, REACTION_EMOJIS.random())
         }
     }
 
+    /**
+     * 给指定角色补一条日记评论（待办队列消费用）。
+     * 与 [generateCommentsForEntry] 共用同一套守卫，但只针对一个角色，不重新随机选人。
+     */
+    suspend fun generateCommentForCharacter(entryUuid: String, characterUuid: String) {
+        val entry = diaryRepository.getEntry(entryUuid) ?: return
+        if (entry.authorCharacterUuid != null) return
+        if (DiaryVisibility.fromRaw(entry.visibilityRaw) != DiaryVisibility.OPEN_TO_AI) return
+        val config = apiConfigRepo.resolveConfigValues(ApiFunction.DIARY_GENERATION) ?: return
+        val settings = settingsRepo.getAppSettings()
+        if (!settings.diaryCharacterInteractionEnabled) return
+        val character = characterDao.getByUuid(characterUuid) ?: return
+        // 已评过 → 跳过（幂等）。
+        if (diaryRepository.commentCountByCharacter(entryUuid, characterUuid) > 0) return
+
+        val strings = DiaryCommentPromptStrings.from(PromptStrings(context))
+        val userName = userProfileDao.get()?.nickname?.trim()?.takeIf { it.isNotEmpty() }
+            ?: context.getString(R.string.diary_user_fallback)
+        val content = generateComment(strings, character, entry.content, userName, config, entry.imagePaths.size) ?: return
+        diaryRepository.addComment(entryUuid, content, characterUuid, System.currentTimeMillis())
+    }
+    
     /** 单条评论 LLM 生成（temp 0.9）。剥 think 后为空 → null（跳过该条，对齐 iOS catch→continue）。 */
     private suspend fun generateComment(
         strings: DiaryCommentPromptStrings,
