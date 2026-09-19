@@ -251,7 +251,7 @@ class LlmClient(
             useMaxCompletionTokens = useMaxCompletionTokens, dropTemperature = dropTemperature,
         )
         val client = baseClient.newBuilder()
-            .callTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(600, TimeUnit.SECONDS)
             .build()
         val url = buildUrl(config.baseUrl)
 
