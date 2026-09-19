@@ -227,7 +227,7 @@ class DiaryCommentService @Inject constructor(
             if (sleepChecker.isSleeping(uuid, settings.scheduleSystemEnabled, nowMillis, zone)) {
                 DiaryPendingInteractionStore.add(context, entryUuid, uuid, "reaction")
             } else {
-            diaryRepository.addReaction(entryUuid, uuid, REACTION_EMOJIS.random())
+                diaryRepository.addReaction(entryUuid, uuid, REACTION_EMOJIS.random())
             } 
         }
     }
