@@ -1,5 +1,6 @@
 package com.situ.aichat.prompt.diary
 
+import android.content.Context
 import com.situ.aichat.data.local.dao.CharacterDao
 import com.situ.aichat.data.local.dao.MessageDao
 import com.situ.aichat.data.local.entity.DiaryEntryEntity
@@ -34,6 +35,7 @@ class DiaryGenerationCoordinatorTest {
 
     /** 补昨路径 T2 夹具：全依赖 MockK 假掉，[arrange] 摆好「昨天无日记 + 有聊天 + 无礼物/宠物分支」的最短通路。 */
     private class BackfillFixture {
+        val appContext = mockk<Context>(relaxed = true)
         val diaryRepository = mockk<DiaryRepository>()
         val messageDao = mockk<MessageDao>()
         val settingsRepo = mockk<SettingsRepository>()
@@ -43,6 +45,7 @@ class DiaryGenerationCoordinatorTest {
         val commentService = mockk<DiaryCommentService>(relaxed = true)
         val saved = slot<DiaryEntryEntity>()
         val coordinator = DiaryGenerationCoordinator(
+            context = appContext,
             diaryRepository = diaryRepository,
             characterDao = mockk<CharacterDao>(relaxed = true),
             messageDao = messageDao,
