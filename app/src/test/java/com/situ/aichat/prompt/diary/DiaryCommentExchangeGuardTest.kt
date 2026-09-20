@@ -11,6 +11,7 @@ import com.situ.aichat.data.repository.ApiConfigRepository
 import com.situ.aichat.data.repository.DiaryRepository
 import com.situ.aichat.data.repository.SettingsRepository
 import com.situ.aichat.diagnostics.ContextLogService
+import com.situ.aichat.prompt.schedule.CharacterSleepChecker
 import com.situ.aichat.util.LocaleManager
 import com.situ.aichat.work.BackgroundScheduler
 import io.mockk.coEvery
@@ -41,6 +42,7 @@ class DiaryCommentExchangeGuardTest {
     private val characterDao = mockk<CharacterDao>(relaxed = true)
     private val userProfileDao = mockk<UserProfileDao>(relaxed = true)
     private val settingsRepo = mockk<SettingsRepository>()
+    private val sleepChecker = mockk<CharacterSleepChecker>(relaxed = true)
     private val service = DiaryCommentService(
         context = context,
         contextLog = contextLog,
@@ -50,6 +52,7 @@ class DiaryCommentExchangeGuardTest {
         userProfileDao = userProfileDao,
         settingsRepo = settingsRepo,
         backgroundScheduler = mockk<BackgroundScheduler>(relaxed = true),
+        sleepChecker = sleepChecker,
     )
 
     /** TA 的信：作者非空 + triggerTypeRaw='exchange'（openToAI，好让「守卫不生效」时能一路走下去）。 */
